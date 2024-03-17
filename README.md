@@ -15,8 +15,8 @@ This simple tool, allows you to keep track of the price of an item on Amazon and
 
 #### Version 2
 
-- [ ] Change to use classes
-- [ ] The tool will take in a new input "price", which checks if current item price <= "price"
+- ~~[ ] Change to use classes~~
+- [X] The tool will take in a new input "price", which checks if current item price <= "price"
 - [ ] Ability to generate graphs of price over time
 
 #### Version 3
@@ -36,4 +36,5 @@ This simple tool, allows you to keep track of the price of an item on Amazon and
 - [ ] User can add items to a watchlist
 - [ ] User can set a price for each item
 - [ ] The tool will send an email to the user if the price is less than the set price
+
 
