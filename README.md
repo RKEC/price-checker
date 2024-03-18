@@ -15,26 +15,29 @@ This simple tool, allows you to keep track of the price of an item on Amazon and
 
 #### Version 2
 
-- ~~[ ] Change to use classes~~
+- ~~Change to use classes~~
 - [X] The tool will take in a new input "price", which checks if current item price <= "price"
-- [ ] Ability to generate graphs of price over time
+- [ ] The tool will send an email to the user if the price is less than the set price
+- [ ] Run on a cron to constantly get updated price
 
 #### Version 3
-- [ ] The tool will run on a cron and constantly output price
 - [ ] Implement threads to check multiple items at once
 - [ ] Implement a database to store price data
+- [ ] Ability to generate graphs of price over time
 
 #### Version 4
 - [ ] New data is pushed to API endpoint
 - [ ] Implement docker container
 
 #### Version 5
-- [ ] Web App
-- [ ] User Authentication
+- [ ] Store data in a database
+- [ ] Create a simple backend for website
+- [ ] Create a simple frontend for website
 
 #### Version 6
-- [ ] User can add items to a watchlist
+- [ ] Set up user accounts
+- [ ] User can add items to a price watchlist through web interface
 - [ ] User can set a price for each item
-- [ ] The tool will send an email to the user if the price is less than the set price
 
-
+#### Version 7
+- [ ] Improve the frontend
