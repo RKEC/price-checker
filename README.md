@@ -15,7 +15,7 @@ This simple tool, allows you to keep track of the price of an item on Amazon and
 
 #### Version 2
 
-- ~~Change to use classes~~
+- [ ] ~~Change to use classes~~
 - [X] The tool will take in a new input "price", which checks if current item price <= "price"
 - [ ] The tool will send an email to the user if the price is less than the set price
 - [ ] Run on a cron to constantly get updated price

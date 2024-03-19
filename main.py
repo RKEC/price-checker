@@ -2,6 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 import logging
 import json
+import os
+import smtplib
+from dotenv import load_dotenv
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 def user_input():
     while True:
@@ -34,14 +39,15 @@ def gather_data(url, price):
             price_element = pretty.find(id="priceValue")
             if title_element and price_element:
                 title = title_element.get_text().strip().split(',')[0]
-                price = price_element.get('value')
+                current_price = price_element.get('value')
                 data = {
                     "title": title,
-                    "price": price
+                    "price": float(current_price),
+                    "target_price": float(price)
                 }
                 print(json.dumps(data, indent=4))
-                if float(data['price']) <= price:
-                    print(f"Price is lower than {price}")
+                if data['price'] <= price:
+                    send_email(os.getenv('TO_EMAIL'), data)
             else:
                 logging.error("Couldn't find necessary data on the page.")
         except Exception as e:
@@ -49,6 +55,29 @@ def gather_data(url, price):
     else:
         logging.error("No data received from the server.")
 
+def setup_email_server():
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login(os.getenv('SENDER_EMAIL'), os.getenv('SENDER_PASSWORD'))
+    return server
+
+def send_email(to_email, data):
+    server = setup_email_server()
+    message = MIMEMultipart()
+    message['From'] = os.getenv('SENDER_EMAIL')
+    message['To'] = to_email
+    message['Subject'] = 'An item on your wishlist is on sale!'
+
+    body = f'Item: {data['title']} is on sale at £{data['price']}! This is a price decrease of £{data['target_price'] - data['price']}.'
+    message.attach(MIMEText(body, 'plain'))
+
+    text = message.as_string()
+    server.sendmail(os.getenv('SENDER_EMAIL'), to_email, text)
+    server.quit()
+    print("Email sent!")
+
+
 if __name__ == '__main__':
+    load_dotenv()
     url, price = user_input()
     gather_data(url, price)
