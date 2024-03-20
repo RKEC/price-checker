@@ -41,6 +41,7 @@ def gather_data(url, price):
                 title = title_element.get_text().strip().split(',')[0]
                 current_price = price_element.get('value')
                 data = {
+                    "url": url,
                     "title": title,
                     "price": float(current_price),
                     "target_price": float(price)
@@ -68,8 +69,54 @@ def send_email(to_email, data):
     message['To'] = to_email
     message['Subject'] = 'An item on your wishlist is on sale!'
 
-    body = f'Item: {data['title']} is on sale at £{data['price']}! This is a price decrease of £{data['target_price'] - data['price']}.'
-    message.attach(MIMEText(body, 'plain'))
+    price_difference = "{:.2f}".format(data['target_price'] - data['price'])
+
+    body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    body {{
+        font-family: Arial, sans-serif;
+    }}
+    .container {{
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+    }}
+    .title {{
+        font-weight: bold;
+    }}
+    .details {{
+        margin-top: 10px;
+    }}
+    .details li {{
+        margin-bottom: 5px;
+    }}
+    </style>
+    </head>
+    <body>
+    <div class="container">
+        <p>Good news!</p>
+        <p>An item on your wishlist is on sale</p>
+        
+        <div class="title">{data['title']}</div>
+        
+        <ul class="details">
+            <li>Target Price: <b>£{data['target_price']}</b></li>
+            <li>Current Price: <b>£{data['price']}</b></li>
+            <li>This represents a price decrease of <b>£{price_difference}</b></li>
+        </ul>
+        </br>
+        
+        <p>If you're interested, you can check it out at the following link:</p>
+        <p><a href="{data['url']}">{data['url']}</a></p>
+    </div>
+    </body>
+    </html>
+    """
+    
+    message.attach(MIMEText(body, 'html'))
 
     text = message.as_string()
     server.sendmail(os.getenv('SENDER_EMAIL'), to_email, text)
