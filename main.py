@@ -25,39 +25,92 @@ def scrape_data(url, headers):
     while True:
         try:
             page = requests.get(url=url, headers=headers, timeout=30)
-
+            page.raise_for_status()  # Raise an exception for HTTP errors
             raw = BeautifulSoup(page.content, 'html.parser')
 
             title_element = raw.find(id="productTitle")
-            price_element = raw.find(id="priceValue")
+            if raw.find(id="twister-plus-price-data-price") is not None:
+                price_element = raw.find(id="twister-plus-price-data-price")
+            elif raw.find(id="priceValue") is not None:
+                price_element = raw.find(id="priceValue")
+            else:
+                raise ValueError("Cannot find price element on the page.")
+            
+            brand_element = raw.find(id="bylineInfo")
 
-            return title_element, price_element
+            image_elements = raw.find(class_="a-dynamic-image")
+
+            if title_element is None or price_element is None or image_elements is None:
+                raise ValueError("Cannot find all necessary elements on the page.")
+
+            dynamic_image_data = image_elements.get('data-a-dynamic-image')
+            try:
+                dynamic_image_dict = json.loads(dynamic_image_data)
+            except json.JSONDecodeError:
+                logging.error("Error decoding JSON data for image.")
+
+            title = title_element.get_text().strip()
+            current_price = float(price_element.get('value'))
+
+            brand_href = brand_element.get('href')
+            start_index = brand_href.find("/stores/") + len("/stores/")
+            end_index = brand_href.find("/page")     
+            brand_name = brand_href[start_index:end_index]
+            
+            if start_index == -1 or end_index == -1:
+                brand_name = "Unknown"
+
+            image_url = list(dynamic_image_dict.keys())[2]
+            image_dimensions = list(dynamic_image_dict.values())[2]
+
+            item_details = {
+                "brand": brand_name,
+                "title": title,
+                "current_price": current_price
+            }
+
+            image_details = {
+                "url": image_url,
+                "width": image_dimensions[0],
+                "height": image_dimensions[1]
+            }
+
+            return item_details, image_details
         except requests.exceptions.MissingSchema:
             logging.error("Invalid URL: No scheme supplied. Please make sure to include http:// or https:// in the URL.")
         except requests.exceptions.ConnectionError:
             logging.error("Can't connect to the server. Please check your internet connection.")
+        except requests.exceptions.HTTPError as e:
+            logging.error(f"HTTP Error: {e.response.status_code}")
+        except ValueError as ve:
+            logging.error(f"ValueError: {ve}")
+        except Exception as ex:
+            logging.error(f"An unexpected error occurred: {ex}")
 
 def gather_data(url, price, scrape=True):
     headers = {'User-Agent': 'Safari/605.1.15'}
-    previous_price = 1000000.00
+    previous_price = float('inf')
 
     while scrape:    
-        title_element, price_element = scrape_data(url, headers)
+        item_details, image_details = scrape_data(url, headers)
         try:
-            if title_element and price_element:
-                title = title_element.get_text().strip().split(',')[0]
-                current_price = float(price_element.get('value'))
+            if item_details and image_details:
+
                 data = {
                     "url": url,
-                    "title": title,
-                    "price": current_price,
+                    "brand": item_details["brand"],
+                    "title": item_details["title"],
+                    "price": item_details["current_price"],
                     "target_price": price,
-                    "previous_price": previous_price
+                    "previous_price": previous_price,
+                    "image_url": image_details['url'],
+                    "image_width": image_details['width'],
+                    "image_height": image_details['height']
                 }
-                if current_price < previous_price:
-                    if current_price <= price:
+                if item_details["current_price"] < previous_price:
+                    if item_details["current_price"] <= price:
                         send_email(os.getenv('TO_EMAIL'), data)
-                previous_price = current_price
+                previous_price = item_details["current_price"]
                 sleep(3600)
             else:
                 logging.error("Couldn't find necessary data on the page.")
@@ -81,6 +134,7 @@ def send_email(to_email, data):
     message['Subject'] = 'An item on your wishlist is on sale!'
 
     price_difference = "{:.2f}".format(data['target_price'] - data['price'])
+    current_price = "{:.2f}".format(data['price'])
 
     body = f"""
     <!DOCTYPE html>
@@ -108,20 +162,20 @@ def send_email(to_email, data):
     </head>
     <body>
     <div class="container">
-        <p>Good news!</p>
-        <p>An item on your wishlist is on sale</p>
+        <h2>An item on your wishlist is on sale!</h2>
+        <br>
         
-        <div class="title">{data['title']}</div>
-        
-        <ul class="details">
-            <li>Target Price: <b>£{data['target_price']}</b></li>
-            <li>Current Price: <b>£{data['price']}</b></li>
-            <li>This represents a price decrease of <b>£{price_difference}</b></li>
+        <img src="{data['image_url']}" alt="{data['title']}" style="width: {data['image_width']*.75}px; height: {data['image_height']*.75}px; margin: 10px;">
+        <br>
+
+        <div class="title"><a href="{data['url']}">{data['title']}</a></div>
+
+        <p>Details: </p>
+        <ul class="details"> 
+            <li>Current Price: <b>£{current_price}</b></li>
+            <li>That's <b>£{price_difference}</b> cheaper than your target price of <b>£{data['target_price']}</b></li>
+            <li>Brand: <b>{data['brand']}</b></li>
         </ul>
-        </br>
-        
-        <p>If you're interested, you can check it out at the following link:</p>
-        <p><a href="{data['url']}">{data['url']}</a></p>
     </div>
     </body>
     </html>
