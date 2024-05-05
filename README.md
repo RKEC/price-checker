@@ -33,8 +33,8 @@ This simple tool, allows you to keep track of the price of an item on Amazon and
 - [X] The tool will send an email to the user if the price is less than the set price
 - [X] Get updated price every hour
 - [X] Add a `requirements.txt` file
-- [ ] Create logo for the tool
-- [ ] Create name for tool
+- [X] Create logo for the tool
+- [ ] ~~Create name for tool~~
 
 #### Version 3
 - [ ] Implement threads to check multiple items at once

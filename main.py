@@ -1,14 +1,28 @@
 import requests
-from bs4 import BeautifulSoup
 import logging
 import json
 import os
-import smtplib
+import argparse
+
 from time import sleep
 from dotenv import load_dotenv
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import random
+from bs4 import BeautifulSoup
+from email_functionality import send_email
+
+skill = False
+
+def welcome():
+    message = r"""
+                  _      _                   _               _       
+                 (_)    | |                 | |             | |      
+             _ __ _  ___| |__   __ _ _ __ __| | ___ ___   __| | ___  
+            | '__| |/ __| '_ \ / _` | '__/ _` |/ __/ _ \ / _` |/ _ \ 
+            | |  | | (__| | | | (_| | | | (_| | (_| (_) | (_| |  __/ 
+            |_|  |_|\___|_| |_|\__,_|_|  \__,_|\___\___/ \__,_|\___|                                                                                                                                        
+            """
+    
+    print(message)
+
 
 def user_input():
     while True:
@@ -28,17 +42,34 @@ def scrape_data(url, headers):
             page.raise_for_status()  # Raise an exception for HTTP errors
             raw = BeautifulSoup(page.content, 'html.parser')
 
-            title_element = raw.find(id="productTitle")
-            if raw.find(id="twister-plus-price-data-price") is not None:
-                price_element = raw.find(id="twister-plus-price-data-price")
-            elif raw.find(id="priceValue") is not None:
-                price_element = raw.find(id="priceValue")
-            else:
-                raise ValueError("Cannot find price element on the page.")
-            
-            brand_element = raw.find(id="bylineInfo")
+            try:
+                title_element = raw.find(id="productTitle")
+            except Exception:
+                raise Exception("Cannot find title element on the page.")
 
-            image_elements = raw.find(class_="a-dynamic-image")
+            try:
+                if raw.find(id="priceValue") is not None:
+                    price_element = raw.find(id="priceValue")
+                    price_element = price_element.get('value')
+                elif raw.find(id="twister-plus-price-data-price") is not None:
+                    price_element = raw.find(id="twister-plus-price-data-price").get('value')
+                elif raw.find("span", class_="aok-offscreen") is not None:
+                    price_element = raw.find("span", class_="aok-offscreen")
+                    price_element = price_element.get_text().replace("£","")
+                else:
+                    raise Exception("Cannot find price element on the page.")
+            except Exception:
+                raise Exception("Cannot find price element on the page.")
+            
+            try:
+                brand_element = raw.find(id="bylineInfo")
+            except Exception:
+                raise Exception("Cannot find brand element on the page.")
+
+            try:
+                image_elements = raw.find(class_="a-dynamic-image")
+            except Exception:
+                raise Exception("Cannot find image element on the page.")
 
             if title_element is None or price_element is None or image_elements is None:
                 raise ValueError("Cannot find all necessary elements on the page.")
@@ -50,7 +81,7 @@ def scrape_data(url, headers):
                 logging.error("Error decoding JSON data for image.")
 
             title = title_element.get_text().strip()
-            current_price = float(price_element.get('value'))
+            current_price = float(price_element)
 
             brand_href = brand_element.get('href')
             start_index = brand_href.find("/stores/") + len("/stores/")
@@ -90,13 +121,14 @@ def scrape_data(url, headers):
 def gather_data(url, price, scrape=True):
     headers = {'User-Agent': 'Safari/605.1.15'}
     previous_price = float('inf')
+    data = {}
 
     while scrape:    
         item_details, image_details = scrape_data(url, headers)
         try:
             if item_details and image_details:
 
-                data = {
+                product = {
                     "url": url,
                     "brand": item_details["brand"],
                     "title": item_details["title"],
@@ -107,9 +139,13 @@ def gather_data(url, price, scrape=True):
                     "image_width": image_details['width'],
                     "image_height": image_details['height']
                 }
+
+                data[len(data.keys())] = product
+
+                logging.info(f"Data received from the server: {product}")
                 if item_details["current_price"] < previous_price:
                     if item_details["current_price"] <= price:
-                        send_email(os.getenv('TO_EMAIL'), data)
+                        send_email(os.getenv('TO_EMAIL'), product)
                 previous_price = item_details["current_price"]
                 sleep(3600)
             else:
@@ -119,78 +155,11 @@ def gather_data(url, price, scrape=True):
     else:
         logging.error("No data received from the server.")
 
-
-def setup_email_server():
-    server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.starttls()
-    server.login(os.getenv('SENDER_EMAIL'), os.getenv('SENDER_PASSWORD'))
-    return server
-
-def send_email(to_email, data):
-    server = setup_email_server()
-    message = MIMEMultipart()
-    message['From'] = os.getenv('SENDER_EMAIL')
-    message['To'] = to_email
-    message['Subject'] = 'An item on your wishlist is on sale!'
-
-    price_difference = "{:.2f}".format(data['target_price'] - data['price'])
-    current_price = "{:.2f}".format(data['price'])
-
-    body = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    body {{
-        font-family: Arial, sans-serif;
-    }}
-    .container {{
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-    }}
-    .title {{
-        font-weight: bold;
-    }}
-    .details {{
-        margin-top: 10px;
-    }}
-    .details li {{
-        margin-bottom: 5px;
-    }}
-    </style>
-    </head>
-    <body>
-    <div class="container">
-        <h2>An item on your wishlist is on sale!</h2>
-        <br>
-        
-        <img src="{data['image_url']}" alt="{data['title']}" style="width: {data['image_width']*.75}px; height: {data['image_height']*.75}px; margin: 10px;">
-        <br>
-
-        <div class="title"><a href="{data['url']}">{data['title']}</a></div>
-
-        <p>Details: </p>
-        <ul class="details"> 
-            <li>Current Price: <b>£{current_price}</b></li>
-            <li>That's <b>£{price_difference}</b> cheaper than your target price of <b>£{data['target_price']}</b></li>
-            <li>Brand: <b>{data['brand']}</b></li>
-        </ul>
-    </div>
-    </body>
-    </html>
-    """
-
-    message.attach(MIMEText(body, 'html'))
-    text = message.as_string()
-    server.sendmail(os.getenv('SENDER_EMAIL'), to_email, text)
-    server.quit()
-    print("Email sent!")
-
 def main():
+    welcome()
     load_dotenv()
-    url, price = user_input()
-    gather_data(url, price)
+    gather_data(os.getenv('URL'), float(os.getenv('PRICE')))
+
 
 if __name__ == '__main__':
     main()
